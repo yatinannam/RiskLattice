@@ -19,6 +19,7 @@ build/
 *.log
 model_artifacts/
 artifacts/
+ml/artifacts/
 
 # Local DB / generated eval artifacts
 *.sqlite3

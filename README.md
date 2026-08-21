@@ -112,26 +112,59 @@ pip install -r apps/api/requirements.txt
 python data/generators/generate_dataset.py
 ```
 
-### Run the tests (Phase 1)
+### Build features + train the baseline (Phase 2)
+
+```
+python ml/features/build_features.py
+python ml/training/train_baseline.py --model logistic_regression
+python ml/training/train_baseline.py --model random_forest
+```
+
+### Evaluate on the held-out split (Phase 2)
+
+```
+python ml/evaluation/evaluate.py --model logistic_regression
+python ml/evaluation/evaluate.py --model random_forest
+```
+
+Artifacts (model pipelines, split metadata, thresholds, metrics JSON) are
+written under `ml/artifacts/` (git-ignored).
+
+### Run the tests
 
 ```
 pytest
 ```
 
-## Demo workflow (Phase 1)
+## Demo workflow
 
 1. Generate the dataset (above).
-2. Run `pytest` to confirm data quality and reproducibility.
+2. Build features and train one or both baselines.
+3. Evaluate on the held-out test split and review `ml/artifacts/*_metrics.json`.
+4. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
 
-An API, dashboard, graph, and evaluation screens will arrive in later phases.
+## Phase 2 status
+
+Implemented: past-only (leakage-free) feature engineering (38 features),
+chronological 80/20 split, Logistic Regression + Random Forest baselines,
+threshold selection on training out-of-fold predictions, held-out evaluation
+with precision/recall/F1/ROC-AUC/PR-AUC, confusion counts, and a documented
+**demo cost model** (INR 500 / false positive, INR 2500 / false negative).
+
+**Explicit limitation:** the baseline is transaction-level only. It does not
+yet understand fraud campaigns, graph relationships, connected components,
+coordinated entities, or containment (Phases 3–5). Whether network-aware
+detection improves decision quality is measured honestly in Phase 9.
 
 ---
 
-## Known limitations (Phase 1)
+## Known limitations (current)
 
-- Only the foundation and dataset exist so far. Feature engineering, the
-  baseline model, graph engine, campaign detection, containment, AI
-  investigator, API routes, and the dashboard are **not yet built**.
+- The graph engine, campaign detector, containment engine, AI investigator,
+  full API routes, and dashboard are **not yet built** (later phases).
+- The current synthetic fraud is relatively separable at the transaction level
+  (high held-out ROC-AUC). This reflects the Phase-1 generator, not a claim of
+  real-world performance; Phase 4 hardening/campaign work will stress this.
 - No Razorpay integration or AI-provider integration exists yet; no real
   credentials are used anywhere.
 - The dataset is fully synthetic, seeded with `SEED = 42` for deterministic
