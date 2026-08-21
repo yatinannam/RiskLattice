@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Environments & secrets
+.env
+.env.*
+.env.example
+!.env.example
+
+# Build / runtime artifacts
+dist/
+build/
+*.egg-info/
+*.log
+model_artifacts/
+artifacts/
+
+# Local DB / generated eval artifacts
+*.sqlite3
+*.db
+
+# OS noise
+.DS_Store
+Thumbs.db
