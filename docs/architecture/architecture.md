@@ -1,9 +1,10 @@
 # RiskLattice Architecture
 
 > Status: architecture document tracks the planned target system and the
-> **current** implementation state. As of **Phase 2**, the implemented layers
+> **current** implementation state. As of **Phase 3**, the implemented layers
 > are: dataset generation, schema, feature engineering, a transaction-level ML
-> baseline, and held-out evaluation. Graph / campaign / containment /
+> baseline, held-out evaluation, and the relationship graph engine (with
+> candidate campaign prelude). Containment / full campaign scoring / AI
 > investigator / API / frontend layers are designed below but not yet built.
 
 ---
@@ -82,25 +83,64 @@ measure whether network-aware detection and containment improve decision
 quality over this baseline — the results may show no improvement, and that will
 be reported honestly.
 
-## 5. Graph model (planned, Phase 3)
+## 5. Graph model (implemented, Phase 3)
+
+### Node & edge model
 
 ```mermaid
 flowchart LR
-    U["USER"] -->|uses| D["DEVICE"]
-    U -->|from| IP["IP"]
-    U -->|owns| PI["PAYMENT_INSTRUMENT"]
-    U -->|performs| T["TRANSACTION"]
-    T -->|at| M["MERCHANT"]
+    U["USER"] -->|USES_DEVICE| D["DEVICE"]
+    U -->|CONNECTS_FROM_IP| IP["IP"]
+    U -->|USES_PAYMENT_INSTRUMENT| PI["PAYMENT_INSTRUMENT"]
+    U -->|PERFORMED| T["TRANSACTION"]
+    T -->|AT_MERCHANT| M["MERCHANT"]
 ```
 
-Edges retain relationship_type, first_seen, last_seen, transaction_count.
-Graph features feed campaign detection.
+Every node stores `node_id` and `node_type`. Transaction nodes additionally
+store `timestamp`, `amount`, `status`. Repeated relationships between the same
+pair are **aggregated** into one edge carrying `relationship_type`,
+`first_seen`, `last_seen`, and `transaction_count`, so temporal awareness is
+retained (distinguishing long-lived normal relationships from new dense
+bursts).
+
+### Temporal relationship model
+
+Each edge's `first_seen`/`last_seen` come from the transaction timestamps.
+Window helpers (`transactions_in_window` for 5m/1h/24h) are **past-only**:
+they consider only transactions at or before the reference timestamp and never
+use future information — consistent with the Phase-2 no-future-leakage rule.
+
+### Graph evidence model
+
+`extract_graph_evidence(transaction_id)` returns structured evidence only:
+`shared_device_users`, `shared_ip_users`, `shared_payment_users`,
+`relationship_counts`, and `temporal_density` (5m/1h/24h windows). No
+natural-language explanation is generated at this layer; the AI investigator
+(Phase 6) will consume this structured evidence.
+
+### Why shared IP != fraud, shared device != fraud, high degree != fraud
+
+The graph is **evidence, not verdict**. A shared IP in a university or office
+produces high `IP` degree and many `shared_ip_users` — the graph records this
+as high connectivity, and the campaign detector treats it as a *signal to
+combine with other signals* (risk score, temporal density, entity sharing),
+never as proof of fraud. Tests enforce that a 100-user shared IP or shared
+device graph carries **no** fraud label on any node.
+
+### Candidate campaigns (Phase 3 prelude)
+
+`campaign_detector.find_campaign_candidates` groups suspicious transactions
+that share an entity and fall within a temporal window. Suspiciousness comes
+from the Phase-2 model probability (or a documented structural fallback when no
+model exists). Ground-truth fields are never used for detection.
 
 ## 6. Campaign detection (planned, Phase 4)
 
-Suspicious transaction scores + shared entities + temporal proximity +
-relationship density produce candidate campaigns with a transparent 0–100
-score.
+The final detector will build on Phase 3 candidate campaigns, adding a
+transparent 0–100 campaign risk score (transaction risk + relationship strength
++ temporal density + behavioral anomaly) with configurable thresholds. Phase 4
+will also report coverage/precision of candidates against ground truth without
+feeding ground truth into detection.
 
 ## 7. Containment flow (planned, Phase 5)
 

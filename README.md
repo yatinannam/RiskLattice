@@ -136,12 +136,41 @@ written under `ml/artifacts/` (git-ignored).
 pytest
 ```
 
+### Build the relationship graph + candidate campaigns (Phase 3)
+
+```
+python engine/graph/graph_builder.py
+python engine/graph/graph_features.py
+python engine/graph/experiment.py
+python engine/graph/campaign_detector.py
+```
+
+`experiment.py` prints graph statistics, high-connectivity entities, and
+evidence examples. `campaign_detector.py` loads the Phase-2 model scores and
+prints candidate campaign structures.
+
 ## Demo workflow
 
 1. Generate the dataset (above).
 2. Build features and train one or both baselines.
 3. Evaluate on the held-out test split and review `ml/artifacts/*_metrics.json`.
-4. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+4. Build the graph and inspect candidate campaigns (`experiment.py`,
+   `campaign_detector.py`).
+5. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+
+## Phase 3 status
+
+Implemented: a typed, temporal-aware relationship graph
+(`engine/graph/graph_builder.py`) over the 10,000-transaction dataset —
+16,897 nodes / 41,165 edges across USER/DEVICE/IP/PAYMENT_INSTRUMENT/
+TRANSACTION/MERCHANT, with aggregate edges carrying
+`relationship_type`, `first_seen`, `last_seen`, `transaction_count`.
+Graph features (`graph_features.py`) compute degree, users-per-entity,
+transactions-per-entity, connected components, relationship density, and
+past-only 5m/1h/24h window helpers. Structured evidence extraction
+(`extract_graph_evidence`) and subgraph extraction are available.
+`campaign_detector.py` finds **candidate** campaigns from Phase-2 risk scores +
+shared entities + temporal proximity (ground-truth fields never used).
 
 ## Phase 2 status
 
@@ -160,8 +189,10 @@ detection improves decision quality is measured honestly in Phase 9.
 
 ## Known limitations (current)
 
-- The graph engine, campaign detector, containment engine, AI investigator,
-  full API routes, and dashboard are **not yet built** (later phases).
+- The final campaign detector with a transparent 0–100 score, containment
+  engine, AI investigator, full API routes, and dashboard are **not yet built**
+  (later phases). Phase 3 delivers the graph engine and *candidate* campaigns
+  only; no containment actions are proposed yet.
 - The current synthetic fraud is relatively separable at the transaction level
   (high held-out ROC-AUC). This reflects the Phase-1 generator, not a claim of
   real-world performance; Phase 4 hardening/campaign work will stress this.
