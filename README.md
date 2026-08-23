@@ -149,6 +149,17 @@ python engine/graph/campaign_detector.py
 evidence examples. `campaign_detector.py` loads the Phase-2 model scores and
 prints candidate campaign structures.
 
+### Campaign intelligence + risk scoring (Phase 4)
+
+```
+python engine/risk/risk_engine.py
+python engine/risk/experiment.py
+```
+
+`experiment.py` produces the Phase-4 report: candidate/assessed counts,
+risk-level distribution, exposure, fraud/legitimate coverage, campaign
+precision/recall, and Phase-2 false-negative recovery analysis.
+
 ## Demo workflow
 
 1. Generate the dataset (above).
@@ -156,7 +167,22 @@ prints candidate campaign structures.
 3. Evaluate on the held-out test split and review `ml/artifacts/*_metrics.json`.
 4. Build the graph and inspect candidate campaigns (`experiment.py`,
    `campaign_detector.py`).
-5. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+5. Assess campaigns (`engine/risk/experiment.py`) and inspect the ranked
+   assessments / evidence.
+6. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+
+## Phase 4 status
+
+Implemented: a deterministic campaign risk engine (`engine/risk/risk_engine.py`)
+over Phase-3 candidate campaigns. Each assessment carries a transparent 0–100
+score ("transparent heuristic campaign score") blending five documented 0..1
+dimensions — transaction, relationship, temporal, concentration, behavioral —
+plus a **confidence** separate from risk, a documented risk-level band
+(LOW/MEDIUM/HIGH/CRITICAL), and structured evidence items referencing only real
+entities/transactions. Deduplication (Jaccard overlap), deterministic ranking
+with filters, ground-truth evaluation (dedicated eval API only), and Phase-2
+false-negative diagnostics are included. The exact formulas are in
+`docs/architecture/architecture.md`.
 
 ## Phase 3 status
 
@@ -189,13 +215,17 @@ detection improves decision quality is measured honestly in Phase 9.
 
 ## Known limitations (current)
 
-- The final campaign detector with a transparent 0–100 score, containment
-  engine, AI investigator, full API routes, and dashboard are **not yet built**
-  (later phases). Phase 3 delivers the graph engine and *candidate* campaigns
-  only; no containment actions are proposed yet.
+- The containment engine (Phase 5), AI investigator (Phase 6), full API routes,
+  and dashboard are **not yet built**. Phase 4 delivers campaign scoring,
+  evidence, ranking, and evaluation only — no containment actions are proposed.
+- Phase-2 false-negative recovery via high-risk campaigns is **measured as 0**
+  on the current dataset: the 109 model false negatives are largely isolated
+  transactions that don't meet the min-3-transaction candidate grouping, and
+  none of the 13 with risk ≥ 0.5 merge into a connected candidate. This is an
+  honest finding, not a claim of improvement.
 - The current synthetic fraud is relatively separable at the transaction level
   (high held-out ROC-AUC). This reflects the Phase-1 generator, not a claim of
-  real-world performance; Phase 4 hardening/campaign work will stress this.
+  real-world performance.
 - No Razorpay integration or AI-provider integration exists yet; no real
   credentials are used anywhere.
 - The dataset is fully synthetic, seeded with `SEED = 42` for deterministic

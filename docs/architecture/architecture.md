@@ -1,11 +1,11 @@
 # RiskLattice Architecture
 
 > Status: architecture document tracks the planned target system and the
-> **current** implementation state. As of **Phase 3**, the implemented layers
+> **current** implementation state. As of **Phase 4**, the implemented layers
 > are: dataset generation, schema, feature engineering, a transaction-level ML
-> baseline, held-out evaluation, and the relationship graph engine (with
-> candidate campaign prelude). Containment / full campaign scoring / AI
-> investigator / API / frontend layers are designed below but not yet built.
+> baseline, held-out evaluation, the relationship graph engine, and campaign
+> intelligence with transparent risk scoring. Containment / AI investigator /
+> API / frontend layers are designed below but not yet built.
 
 ---
 
@@ -134,13 +134,68 @@ that share an entity and fall within a temporal window. Suspiciousness comes
 from the Phase-2 model probability (or a documented structural fallback when no
 model exists). Ground-truth fields are never used for detection.
 
-## 6. Campaign detection (planned, Phase 4)
+## 6. Campaign detection (Phase 4 — implemented)
 
-The final detector will build on Phase 3 candidate campaigns, adding a
-transparent 0–100 campaign risk score (transaction risk + relationship strength
-+ temporal density + behavioral anomaly) with configurable thresholds. Phase 4
-will also report coverage/precision of candidates against ground truth without
-feeding ground truth into detection.
+The final detector builds on Phase 3 candidate campaigns and adds a transparent,
+deterministic 0–100 campaign risk score.
+
+### Risk dimensions (each normalized 0..1)
+
+| Dimension | Formula (documented heuristic) |
+|---|---|
+| transaction_risk | 0.45·mean(proba) + 0.35·high_ratio + 0.20·p90(proba) |
+| relationship_risk | 0.35·density + 0.35·log-scaled fanout + 0.30·multi_signal |
+| temporal_risk | clip(tx_per_hour / 120, 0, 1) |
+| concentration_risk | mean of log-scaled per-entity (users, tx fan-out) |
+| behavioral_risk | 0.40·refund_ratio + 0.30·failed_ratio + 0.30·amount_top_share |
+
+### Campaign score formula ("transparent heuristic campaign score")
+
+    campaign_score =
+        0.35·transaction_risk
+      + 0.25·relationship_risk
+      + 0.20·temporal_risk
+      + 0.10·concentration_risk
+      + 0.10·behavioral_risk
+    → × 100 → 0..100
+
+These weights are a documented starting point, **not** statistically optimal.
+
+### Risk levels (configurable thresholds)
+
+| 0–29 LOW | 30–59 MEDIUM | 60–79 HIGH | 80–100 CRITICAL |
+
+### Risk vs confidence
+
+- **Risk** = "how dangerous does this campaign appear?" (the weighted score).
+- **Confidence** = "how strong is the supporting evidence?" — separate, driven
+  by elevated-signal fraction, entity-type completeness, per-transaction risk
+  agreement (low dispersion), graph evidence strength, and temporal richness.
+
+### Evidence model
+
+Every assessment carries structured `EvidenceItem` objects:
+`shared_device`, `shared_ip`, `shared_payment_instrument`, `temporal_burst`,
+`high_transaction_risk`, `high_velocity`, `refund_pattern`,
+`failed_payment_pattern`, `entity_concentration`. Each references **real**
+entities / supporting transactions only — no invented identifiers.
+
+### Ground-truth evaluation methodology
+
+Ground-truth labels (`is_fraud`, `fraud_campaign_id`) are consumed in
+evaluation only. Documented definitions:
+
+- **fraud_transaction_coverage** = fraud tx in ≥HIGH campaigns / all fraud tx
+- **legitimate_transaction_coverage** = legit tx in ≥HIGH campaigns / all legit tx
+- **candidate_campaign_precision** = fraud tx in flagged set / flagged tx
+- **campaign_recall** = ground-truth fraud campaigns with ≥1 covered tx / all
+- **campaign_precision** = high-risk candidates containing ≥1 fraud tx / high-risk candidates
+
+### False-negative analysis (diagnostic)
+
+Phase-2 false negatives are checked for membership in high-risk campaigns after
+scoring. This is reported as a measured number (it may be zero); the label is
+never fed into detection or scoring.
 
 ## 7. Containment flow (planned, Phase 5)
 
