@@ -348,6 +348,10 @@ def assess_campaign(
         behavioral_risk=dimensions["behavioral_risk"],
         high_risk_transaction_count=len(high_risk_tx),
         transaction_ids=tx_ids,
+        user_ids=sorted(user_ids),
+        device_ids=sorted(device_ids),
+        ip_ids=sorted(ip_ids),
+        payment_instrument_ids=sorted(pi_ids),
         components=dimensions,
     )
 

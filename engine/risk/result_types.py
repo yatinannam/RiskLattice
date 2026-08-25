@@ -59,6 +59,12 @@ class CampaignAssessment:
     high_risk_transaction_count: int
     # Diagnostic identifiers (kept for evaluation; never used by scoring).
     transaction_ids: list[str] = field(default_factory=list)
+    # Entity identifiers used by the containment optimizer for action
+    # generation (Phase 5); also diagnostic only.
+    user_ids: list[str] = field(default_factory=list)
+    device_ids: list[str] = field(default_factory=list)
+    ip_ids: list[str] = field(default_factory=list)
+    payment_instrument_ids: list[str] = field(default_factory=list)
     # Diagnostics kept separately (never used by the scoring formula itself).
     components: dict[str, float] = field(default_factory=dict)
 

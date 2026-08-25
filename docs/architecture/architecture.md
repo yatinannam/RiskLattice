@@ -1,11 +1,12 @@
 # RiskLattice Architecture
 
 > Status: architecture document tracks the planned target system and the
-> **current** implementation state. As of **Phase 4**, the implemented layers
+> **current** implementation state. As of **Phase 5**, the implemented layers
 > are: dataset generation, schema, feature engineering, a transaction-level ML
-> baseline, held-out evaluation, the relationship graph engine, and campaign
-> intelligence with transparent risk scoring. Containment / AI investigator /
-> API / frontend layers are designed below but not yet built.
+> baseline, held-out evaluation, the relationship graph engine, campaign
+> intelligence with transparent risk scoring, and a simulated containment
+> optimizer. AI investigator / API / frontend layers are designed below but
+> not yet built.
 
 ---
 
@@ -197,18 +198,72 @@ Phase-2 false negatives are checked for membership in high-risk campaigns after
 scoring. This is reported as a measured number (it may be zero); the label is
 never fed into detection or scoring.
 
-## 7. Containment flow (planned, Phase 5)
+## 7. Containment flow (implemented, Phase 5)
+
+### Architecture
 
 ```mermaid
 flowchart LR
-    CAMP["Campaign"] --> CAND["Candidate interventions"]
-    CAND --> EST["Estimates: loss prevented, legit impact, collateral risk"]
-    EST --> OPT["Containment optimization heuristic"]
-    OPT --> REC["Recommended intervention"]
+    CAMP["Campaign assessment"] --> CAND["Candidate interventions from campaign entities"]
+    CAND --> EST["Simulate each (whole-dataset collateral)"]
+    EST --> OPT["Bounded combination search (max size 3)"]
+    OPT --> DOM["Remove dominated strategies"]
+    DOM --> REC["Recommended intervention (SIMULATED)"]
+    REC --> AUD["Audit record (approval_required, status SIMULATED)"]
 ```
 
-Containment is a **heuristic** (not claimed optimal). It searches small action
-sets maximizing campaign coverage while minimizing collateral customer cost.
+### Action types
+
+`BLOCK_TRANSACTION`, `REVIEW_TRANSACTION`, `BLOCK_USER`, `REVIEW_USER`,
+`RESTRICT_DEVICE`, `REVIEW_DEVICE`, `RESTRICT_PAYMENT_INSTRUMENT`,
+`REVIEW_PAYMENT_INSTRUMENT`, `MONITOR_CAMPAIGN`, `NO_ACTION`. All are
+SIMULATED / TEST-MODE; no real payment action is executed.
+
+### Simulation model
+
+`simulate_action` evaluates an action against the **entire** dataset (not just
+the campaign): restricting `DEVICE_044` affects every transaction historically
+associated with it, including legitimate ones outside the campaign.
+
+- `fraud_containment_rate` = suspicious tx affected / suspicious tx in campaign
+- `fraud_exposure_contained` = suspicious amount affected (exposure estimate;
+  **not** "money recovered")
+- `legitimate_impact_rate` = legit tx affected / all related legit tx
+- `collateral_risk` = 0.40*legit_tx_norm + 0.25*legit_user_norm +
+  0.20*unrelated_entity_norm + 0.15*legit_proportion → LOW/MEDIUM/HIGH
+
+Ground-truth isolation: during optimization the fraud/legit split is derived
+from Phase-2 risk scores (risk ≥ 0.5 = suspicious). Ground-truth labels are
+consumed only by the dedicated `evaluate_strategy_ground_truth` helper.
+
+### Optimization heuristic (documented, NOT claimed optimal)
+
+1. Generate candidate actions from the campaign's own users/devices/payment
+   instruments/high-risk transactions.
+2. Rank actions by affected suspicious volume; keep top-K=10.
+3. Evaluate singles, pairs, triples (bounded; max 3 actions).
+4. Enforce constraints: max legit users (default 5), min fraud containment
+   (default 0.70), max actions (default 3). If none pass → `NO_SAFE_ACTION`.
+5. Remove dominated strategies (≥ containment and ≤ every impact/cost dim).
+
+### Containment score (transparent heuristic)
+
+    containment_score = fraud_containment_value
+                        - 0.35*legit_impact_penalty
+                        - 0.15*action_cost_penalty
+                        - 0.20*collateral_penalty
+
+### NO_SAFE_ACTION behavior
+
+If no bounded strategy reaches the minimum fraud containment without exceeding
+the legitimate-user cap, the system returns `NO_SAFE_ACTION` rather than
+forcing a recommendation.
+
+### Audit trail
+
+Every recommendation records `decision_id`, `timestamp`, `campaign_id`,
+candidate actions, selected strategy, constraints, risk score, evidence types,
+reason, `approval_required`, and `execution_status: SIMULATED`.
 
 ## 8. AI investigation flow (planned, Phase 6)
 

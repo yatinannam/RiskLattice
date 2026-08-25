@@ -160,6 +160,18 @@ python engine/risk/experiment.py
 risk-level distribution, exposure, fraud/legitimate coverage, campaign
 precision/recall, and Phase-2 false-negative recovery analysis.
 
+### Containment optimizer (Phase 5)
+
+```
+python engine/containment/experiment.py
+```
+
+`experiment.py` runs the simulated-containment optimizer over all assessed
+campaigns and writes `ml/artifacts/containment_experiment.json` — strategy
+distribution, average containment/collateral, NO_SAFE_ACTION count, the
+"block everything vs RiskLattice heuristic" comparison, and a ground-truth
+evaluation of the recommended strategies.
+
 ## Demo workflow
 
 1. Generate the dataset (above).
@@ -169,7 +181,21 @@ precision/recall, and Phase-2 false-negative recovery analysis.
    `campaign_detector.py`).
 5. Assess campaigns (`engine/risk/experiment.py`) and inspect the ranked
    assessments / evidence.
-6. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+6. Run containment (`engine/containment/experiment.py`) and review the
+   recommended strategies vs. the "block everything" baseline.
+7. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+
+## Phase 5 status
+
+Implemented: a simulated containment optimizer (`engine/containment/optimizer.py`)
+over Phase-4 campaign assessments. It generates candidate actions from the
+campaign's own entities, simulates each against the **whole dataset**
+(so legitimate collateral outside the campaign is counted), evaluates bounded
+combinations (max 3 actions, top-10 entities), enforces constraints
+(max 5 legit users, min 70% fraud containment, max 3 actions), removes
+dominated strategies, and either recommends the best strategy or returns
+`NO_SAFE_ACTION` (never forcing an unsafe block). Every recommendation produces
+an audit record with `execution_status: SIMULATED` and `approval_required`.
 
 ## Phase 4 status
 
@@ -215,9 +241,10 @@ detection improves decision quality is measured honestly in Phase 9.
 
 ## Known limitations (current)
 
-- The containment engine (Phase 5), AI investigator (Phase 6), full API routes,
-  and dashboard are **not yet built**. Phase 4 delivers campaign scoring,
-  evidence, ranking, and evaluation only — no containment actions are proposed.
+- The **AI investigator (Phase 6)**, full API routes, and dashboard are **not
+  yet built**. Phase 5 delivers a simulated containment optimizer with audit
+  records and a "block everything vs heuristic" comparison; no real payment
+  action is ever executed.
 - Phase-2 false-negative recovery via high-risk campaigns is **measured as 0**
   on the current dataset: the 109 model false negatives are largely isolated
   transactions that don't meet the min-3-transaction candidate grouping, and
@@ -226,6 +253,8 @@ detection improves decision quality is measured honestly in Phase 9.
 - The current synthetic fraud is relatively separable at the transaction level
   (high held-out ROC-AUC). This reflects the Phase-1 generator, not a claim of
   real-world performance.
+- The containment optimizer is a documented **bounded heuristic**, not a
+  provably optimal solver (no solver dependency by design).
 - No Razorpay integration or AI-provider integration exists yet; no real
   credentials are used anywhere.
 - The dataset is fully synthetic, seeded with `SEED = 42` for deterministic
