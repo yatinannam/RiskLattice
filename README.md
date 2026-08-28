@@ -172,9 +172,28 @@ distribution, average containment/collateral, NO_SAFE_ACTION count, the
 "block everything vs RiskLattice heuristic" comparison, and a ground-truth
 evaluation of the recommended strategies.
 
+## Hardening + adversarial evaluation (Phase 5.5)
+
+Generate the harder dataset (separate from the unchanged baseline):
+
+```
+python data/generators/generate_hardened.py
+```
+
+Run the evaluation:
+
+```
+python engine/hardening/experiment.py
+python engine/hardening/scenario_report.py
+```
+
+Writes `ml/artifacts/hardening_report.json` (baseline metrics + lattice
+recovery/coverage) and `ml/artifacts/hardening_scenario_report.json` (per
+scenario: `baseline_recall`, `campaign_detection_rate`, `baseline_false_negatives`).
+
 ## Demo workflow
 
-1. Generate the dataset (above).
+1. Generate the dataset(s) (baseline + optional hardened).
 2. Build features and train one or both baselines.
 3. Evaluate on the held-out test split and review `ml/artifacts/*_metrics.json`.
 4. Build the graph and inspect candidate campaigns (`experiment.py`,
@@ -183,7 +202,20 @@ evaluation of the recommended strategies.
    assessments / evidence.
 6. Run containment (`engine/containment/experiment.py`) and review the
    recommended strategies vs. the "block everything" baseline.
-7. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+7. Run the hardening evaluation (`engine/hardening/experiment.py`).
+8. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
+
+## Phase 5.5 status
+
+Implemented: a separate deterministic **hardened** dataset
+(`transactions_hardened.csv`, seed 2026, 12,000 rows) with low-signal fraud,
+legitimate shared infrastructure, legitimate bursts, and mixed fraud/legit
+entities; plus an honest adversarial evaluation (`engine/hardening/`). The
+baseline dataset stays byte-identical (SEED=42). Findings are reported as-is:
+on the hardened set the fresh baseline reached ROC-AUC ≈ 0.955 / recall ≈ 0.82,
+produced **89 test false negatives**, and the lattice recovered only **2
+(2.25%)** via high-risk campaigns — an honest, limited result, not a claim of
+superiority.
 
 ## Phase 5 status
 
@@ -242,23 +274,25 @@ detection improves decision quality is measured honestly in Phase 9.
 ## Known limitations (current)
 
 - The **AI investigator (Phase 6)**, full API routes, and dashboard are **not
-  yet built**. Phase 5 delivers a simulated containment optimizer with audit
-  records and a "block everything vs heuristic" comparison; no real payment
-  action is ever executed.
-- Phase-2 false-negative recovery via high-risk campaigns is **measured as 0**
-  on the current dataset: the 109 model false negatives are largely isolated
-  transactions that don't meet the min-3-transaction candidate grouping, and
-  none of the 13 with risk ≥ 0.5 merge into a connected candidate. This is an
-  honest finding, not a claim of improvement.
+  yet built**. Phase 5.5 delivers an honest defensive-engineering evaluation +
+  a simulated containment optimizer; no real payment action is ever executed.
+- **Phase-5.5 honest finding:** on the hardened dataset the lattice recovered
+  only **2 of 89 (2.25%)** baseline test false negatives via high-risk
+  campaigns, and fraud-transaction coverage of high-risk campaigns was ~12.7%.
+  The lattice does NOT clearly beat the transaction-level baseline on this
+  low-signal set; the lattice's clearest measured value remains **collateral
+  reduction** in containment (Phase 5) and **safe refusal** (NO_SAFE_ACTION).
+- On the easy baseline dataset, false-negative recovery was likewise measured
+  as 0 (109 FNs, of which 13 had risk ≥ 0.5, none inside any candidate).
 - The current synthetic fraud is relatively separable at the transaction level
-  (high held-out ROC-AUC). This reflects the Phase-1 generator, not a claim of
-  real-world performance.
+  on the Phase-1 dataset (high ROC-AUC), which is why the lattice's marginal
+  value is small there; the hardened set is harder but still synthetic.
 - The containment optimizer is a documented **bounded heuristic**, not a
-  provably optimal solver (no solver dependency by design).
+  provably optimal solver.
 - No Razorpay integration or AI-provider integration exists yet; no real
   credentials are used anywhere.
-- The dataset is fully synthetic, seeded with `SEED = 42` for deterministic
-  reproducibility, and is **not** real Razorpay transaction data.
+- The datasets are fully synthetic (SEED=42 baseline, seed-2026 hardened) and
+  are **not** real Razorpay transaction data.
 
 ## Security notes
 

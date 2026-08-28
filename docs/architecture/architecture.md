@@ -1,12 +1,12 @@
 # RiskLattice Architecture
 
 > Status: architecture document tracks the planned target system and the
-> **current** implementation state. As of **Phase 5**, the implemented layers
-> are: dataset generation, schema, feature engineering, a transaction-level ML
-> baseline, held-out evaluation, the relationship graph engine, campaign
-> intelligence with transparent risk scoring, and a simulated containment
-> optimizer. AI investigator / API / frontend layers are designed below but
-> not yet built.
+> **current** implementation state. As of **Phase 5.5**, the implemented layers
+> are: dataset generation (+ a hardened adversarial dataset), schema, feature
+> engineering, a transaction-level ML baseline, held-out evaluation, the
+> relationship graph engine, campaign intelligence, a simulated containment
+> optimizer, and an honest hardening/adversarial evaluation. AI investigator /
+> API / frontend layers are designed below but not yet built.
 
 ---
 
@@ -264,6 +264,53 @@ forcing a recommendation.
 Every recommendation records `decision_id`, `timestamp`, `campaign_id`,
 candidate actions, selected strategy, constraints, risk score, evidence types,
 reason, `approval_required`, and `execution_status: SIMULATED`.
+
+## 7b. Hardening + adversarial evaluation (Phase 5.5)
+
+### Methodology
+
+The hardening layer (`engine/hardening/`) stress-tests RiskLattice against a
+separate, deterministic synthetic dataset (`data/samples/transactions_hardened.csv`,
+seed 2026, 12,000 rows) that is genuinely harder than the Phase-1 baseline:
+
+1. **Baseline**: train the Phase-2 Logistic Regression on the hardened temporal
+   **training** split only (never the held-out test); evaluate on the held-out
+   test.
+2. **Lattice**: build the graph, detect + score campaigns, and run containment
+   over the hardened data using only model risk probabilities — ground truth is
+   never fed to detection.
+3. **False-negative recovery**: matched baseline test-window FNs that fall
+   inside high-risk RiskLattice campaigns.
+4. **Per-scenario table** (ground-truth labels used only here).
+
+### Adversarial / legitimate scenarios
+
+- **Low-signal fraud**: `low_signal_account_farm`, `low_signal_payment_abuse`,
+  `low_signal_coordinated_burst`, `mixed_entity_campaign`,
+  `slow_coordinated_campaign` — individual transactions use normal amounts,
+  mostly-successful status, and varied payment methods (weak per-tx signal).
+- **Legitimate shared infrastructure**: `legitimate_shared_office`,
+  `legitimate_shared_university`, `legitimate_household`, `legitimate_burst` —
+  high connectivity that must NOT be treated as fraud.
+- **Mixed entities**: shared devices connect both fraud and legitimate users,
+  so blocking the entity creates collateral.
+
+### Key methodological rule (honesty)
+
+This is an **evaluation** phase. Thresholds, weights, the dataset, and features
+are NOT tuned after seeing test results. The first hardened evaluation is
+immutable. If results are weak, they are reported weak.
+
+### Found results (from `ml/artifacts/hardening_report.json`)
+
+The hardened dataset is meaningfully harder: the fresh baseline reached
+ROC-AUC ≈ 0.955 / recall ≈ 0.82 at threshold 0.7 (versus ≈ 0.99 / 0.93 on the
+easy baseline). On the hardened held-out test, the baseline produced **89 false
+negatives**; the lattice recovered only **2 (2.25%)** of them via high-risk
+campaigns, and fraud-transaction coverage of high-risk campaigns was ~12.7%.
+Legitimate impact inside the flagged set was 0.0%. This honestly shows the
+lattice adds **limited** measured value on this hardening set — it does not
+"beat the baseline" on low-signal fraud, and we do not claim otherwise.
 
 ## 8. AI investigation flow (planned, Phase 6)
 
