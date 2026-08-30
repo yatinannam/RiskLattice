@@ -218,12 +218,19 @@ def test_ground_truth_never_used_by_detection_pipeline():
     df_clean["fraud_campaign_id"] = None
     df_clean["scenario"] = "legitimate"
 
-    risk = {t: 0.6 for t in df["transaction_id"]}
+    # Sparse risk mask keeps the candidate search fast while still exercising
+    # the full detection path (graph + candidate campaigns).
+    first_ids = set(df["transaction_id"].iloc[:600])
+    risk = {t: (0.95 if t in first_ids else 0.02)
+            for t in df["transaction_id"]}
+
     g1 = build_graph(df)
     g2 = build_graph(df_clean)
     assert sorted(g1.nodes) == sorted(g2.nodes)
-    c1 = find_campaign_candidates(g1, risk_scores=risk)[:0]
-    c2 = find_campaign_candidates(g2, risk_scores=risk)[:0]
-    # Candidate lists are comparable by structure, not by ground-truth label.
-    assert all("is_fraud" not in c for c in find_campaign_candidates(g2, risk_scores=risk))
-    assert all("fraud_campaign_id" not in c for c in find_campaign_candidates(g2, risk_scores=risk))
+
+    c2 = find_campaign_candidates(g2, risk_scores=risk)
+    # Candidate structures must never carry ground-truth labels.
+    assert isinstance(c2, list)
+    for cand in c2:
+        for forbidden in ("is_fraud", "fraud_campaign_id", "scenario"):
+            assert forbidden not in cand

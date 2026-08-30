@@ -1,12 +1,13 @@
 # RiskLattice Architecture
 
 > Status: architecture document tracks the planned target system and the
-> **current** implementation state. As of **Phase 5.5**, the implemented layers
-> are: dataset generation (+ a hardened adversarial dataset), schema, feature
+> **current** implementation state. As of **Phase 6**, the implemented layers
+> are: dataset generation (+ hardened adversarial dataset), schema, feature
 > engineering, a transaction-level ML baseline, held-out evaluation, the
 > relationship graph engine, campaign intelligence, a simulated containment
-> optimizer, and an honest hardening/adversarial evaluation. AI investigator /
-> API / frontend layers are designed below but not yet built.
+> optimizer, an honest hardening evaluation, and a grounded AI investigation
+> layer (deterministic mock provider). API / frontend / real LLM adapters /
+> Razorpay integration remain future work.
 
 ---
 
@@ -312,21 +313,72 @@ Legitimate impact inside the flagged set was 0.0%. This honestly shows the
 lattice adds **limited** measured value on this hardening set — it does not
 "beat the baseline" on low-signal fraud, and we do not claim otherwise.
 
-## 8. AI investigation flow (planned, Phase 6)
+## 8. AI investigation flow (implemented, Phase 6)
 
-InvestigatorProvider abstraction consumes structured evidence only:
-campaign summary, risk score, graph relationships, transaction statistics,
-containment candidates, historical context. Deterministic template fallback
-keeps the app functional without an LLM API key.
+### Architecture
+
+InvestigatorProvider consumes structured evidence only: campaign summary,
+risk score, graph relationships, transaction statistics, containment
+candidates, and collateral metrics. A deterministic mock provider keeps the app
+functional without an LLM API key; a strict validator rejects any report that
+references unsupported evidence.
 
 ```mermaid
 sequenceDiagram
-    participant E as Evidence store
-    participant P as InvestigatorProvider (LLM or fallback)
+    participant E as Evidence builder
+    participant P as InvestigatorProvider (mock)
+    participant V as Validator (hallucination guard)
     participant M as Merchant dashboard
-    E->>P: structured evidence (no invented fields)
-    P->>M: summary, evidence, explanation, recommended action, limitations
+    E->>P: InvestigationEvidence (grounded, no ground truth)
+    P->>P: generate report (FACT/INFERENCE/UNCERTAINTY, cited evidence IDs)
+    P->>V: InvestigationReport
+    V-->>V: reject if unknown IDs / off-package numbers
+    V->>M: Validated report + audit trail
 ```
+
+### Grounding strategy
+
+Every material claim in the report must cite an `evidence_id` that exists in
+the evidence package; every transaction/entity referenced must exist in the
+package. `validate_report` raises `InvestigationValidationError` on any
+unsupported reference (never silently repaired). The mock provider uses only
+the supplied evidence — no randomness, no invention.
+
+### Evidence model
+
+`InvestigationEvidence` carries: campaign id/score/level/confidence, all
+entity and transaction IDs, risk dimensions, graph-derived findings, containment
+options, recommended action, collateral metrics, and uncertainty flags.
+Ground-truth fields (`is_fraud`, `fraud_campaign_id`, `scenario`) are never
+included.
+
+### Hallucination validation
+
+`validate_report(report, evidence)` enforces: every cited evidence ID exists,
+every material claim about an entity/transaction has ≥1 evidence ID, every
+transaction referenced by a finding exists in the package, and the
+recommended action's containment rate matches the supplied package.
+
+### Mock mode
+
+`MockInvestigatorProvider` is deterministic: same evidence → same report → same
+validation result. It distinguishes FACT / INFERENCE / UNCERTAINTY, explains
+collateral and NO_SAFE_ACTION, and never executes containment. The project runs
+fully offline with no API key (`INVESTIGATOR_PROVIDER=mock`, or any name falls
+back to mock).
+
+## 9. Critical safety boundary (investigator)
+
+The AI investigator does NOT execute containment and does NOT make the final
+fraud determination. It explains a deterministic recommendation. Execution
+remains `SIMULATED / TEST MODE ONLY` until an explicit approval flow exists
+(outside the investigator).
+
+## 10. (Legacy) Planned sections below are retained for reference
+
+The following planned layers remain future work: full API routes, merchant
+dashboard/frontend, real provider adapters (openai/anthropic behind the
+InvestigatorProvider interface), and Razorpay test-mode integration.
 
 ## 9. Decision & audit model (planned)
 

@@ -205,6 +205,22 @@ scenario: `baseline_recall`, `campaign_detection_rate`, `baseline_false_negative
 7. Run the hardening evaluation (`engine/hardening/experiment.py`).
 8. Run `pytest` to confirm data quality, leakage guards, and reproducibility.
 
+## Phase 6 status
+
+Implemented: a grounded **AI investigation** layer (`engine/investigator/`).
+`InvestigationEvidence` packages deterministic risk/graph/containment data;
+`InvestigatorProvider` (mock, no API key) generates a reproducible report with
+FACT/INFERENCE/UNCERTAINTY findings, each citing evidence IDs; `validate_report`
+is a hard hallucination guard (rejects unknown IDs / off-package numbers);
+`investigate_campaign` runs the full workflow end-to-end. It never executes
+containment and never makes the final fraud determination. Run it with:
+
+```
+python engine/investigator/experiment.py
+```
+
+Output: `ml/artifacts/investigator_report.json`.
+
 ## Phase 5.5 status
 
 Implemented: a separate deterministic **hardened** dataset
@@ -273,9 +289,14 @@ detection improves decision quality is measured honestly in Phase 9.
 
 ## Known limitations (current)
 
-- The **AI investigator (Phase 6)**, full API routes, and dashboard are **not
-  yet built**. Phase 5.5 delivers an honest defensive-engineering evaluation +
-  a simulated containment optimizer; no real payment action is ever executed.
+- The **full API routes** and **dashboard/frontend** are **not yet built**.
+  Phase 6 delivers the AI investigation layer (mock provider, validated);
+  no real payment action is ever executed, and the investigator never executes
+  containment.
+- Real LLM provider adapters (OpenAI/Anthropic) are **not wired up** — the
+  application runs offline with the deterministic mock provider, and any
+  requested provider name falls back to mock (documented in
+  `engine/investigator/`).
 - **Phase-5.5 honest finding:** on the hardened dataset the lattice recovered
   only **2 of 89 (2.25%)** baseline test false negatives via high-risk
   campaigns, and fraud-transaction coverage of high-risk campaigns was ~12.7%.
