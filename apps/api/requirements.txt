@@ -25,3 +25,4 @@ tzdata==2026.3
 uvicorn==0.52.4
 
 pytest==9.0.2
+httpx2==2.12.0

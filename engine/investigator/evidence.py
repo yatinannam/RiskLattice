@@ -106,16 +106,23 @@ def build_evidence(assessment, containment: dict, campaign=None) -> Investigatio
     containment_options = [
         s for s in containment.get("alternative_strategies", [])
     ]
-    recommended = containment.get("recommended_strategy", {})
+    recommended = containment.get("recommended_strategy") or {}
 
+    # Ground the recommended-action numbers from the SAME describe() dict that
+    # the report carries, so validation can never see a rounding mismatch.
     collateral_metrics = {
-        "recommended_fraud_containment_rate": containment.get(
-            "expected_fraud_containment", 0.0),
-        "recommended_fraud_exposure_contained": containment.get(
-            "expected_fraud_exposure_contained", 0.0),
-        "recommended_legitimate_users_affected": containment.get(
-            "expected_legitimate_users_affected", 0),
-        "recommended_collateral_level": containment.get("collateral_level", "LOW"),
+        "recommended_fraud_containment_rate": recommended.get(
+            "fraud_containment_rate",
+            containment.get("expected_fraud_containment", 0.0)),
+        "recommended_fraud_exposure_contained": recommended.get(
+            "fraud_exposure_contained",
+            containment.get("expected_fraud_exposure_contained", 0.0)),
+        "recommended_legitimate_users_affected": recommended.get(
+            "legitimate_users_affected",
+            containment.get("expected_legitimate_users_affected", 0)),
+        "recommended_collateral_level": recommended.get(
+            "collateral_level",
+            containment.get("collateral_level", "LOW")),
     }
 
     return InvestigationEvidence(

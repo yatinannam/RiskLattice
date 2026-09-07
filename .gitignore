@@ -21,6 +21,10 @@ model_artifacts/
 artifacts/
 ml/artifacts/
 
+# Node / frontend
+node_modules/
+*.tsbuildinfo
+
 # Local DB / generated eval artifacts
 *.sqlite3
 *.db
